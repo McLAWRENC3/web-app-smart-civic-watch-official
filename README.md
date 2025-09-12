@@ -1,70 +1,60 @@
-# Getting Started with Create React App
+**Web App Prerequisites**
+Node.js (version 14 or higher)
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+npm or yarn package manager
 
-## Available Scripts
+Firebase Account (same project as mobile app)
 
-In the project directory, you can run:
+Modern web browser (Chrome, Firefox, Safari, or Edge)
 
-### `npm start`
+**Web Application Setup Instructions**
+1. Navigate to Web App Directory
+   cd web-app
+2. Install Dependencies
+   npm install
+3. Firebase Configuration
+Use the same Firebase project as your mobile app
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+Create a .env file in the web-app directory
+Add your Firebase configuration:
+REACT_APP_API_KEY=your_api_key_here
+REACT_APP_AUTH_DOMAIN=your_project_id.firebaseapp.com
+REACT_APP_PROJECT_ID=your_project_id
+REACT_APP_STORAGE_BUCKET=your_project_id.appspot.com
+REACT_APP_MESSAGING_SENDER_ID=your_sender_id
+REACT_APP_APP_ID=your_app_id
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+4. Start Development Server
+   npm start
+   
+**The application will open in your browser at http://localhost:3000**
 
-### `npm test`
+Web App Features
+Admin Dashboard
+View real-time incident reports from mobile users
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Monitor emergency alerts and community activity
 
-### `npm run build`
+Manage user accounts and permissions
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Analyze trends through data visualization
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Incident Management
+Review and verify reported incidents
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Update incident status (pending, in-progress, resolved)
 
-### `npm run eject`
+Communicate with reporters through comment system
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Export incident data for reporting purposes
+User Administration
+View registered user accounts
+Analytics and Reporting
+Visualize incident trends on interactive charts
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Generate reports on community engagement
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+Monitor system usage statistics
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+Export data for external analysis
 
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)

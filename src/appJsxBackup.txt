@@ -1,0 +1,27 @@
+import { ThemeProvider } from '@mui/material/styles';
+import { CssBaseline } from '@mui/material';
+import { BrowserRouter } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { theme } from './assets/styles/theme';
+import AppRoutes from './routes/AppRoutes';
+import AppLayout from './components/layout/AppLayout';
+import { ToastContainer } from 'react-hot-toast';
+import { Toaster } from 'react-hot-toast';
+
+function App() {
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <BrowserRouter>
+        <AuthProvider>
+          <AppLayout>
+            <AppRoutes />
+          </AppLayout>
+          <Toaster position="top-right" />
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
+  );
+}
+
+export default App;

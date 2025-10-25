@@ -25,7 +25,15 @@ import {
   Snackbar,
   Alert,
   Avatar,
-  Divider
+  Divider,
+  Card,
+  CardContent,
+  Grid,
+  LinearProgress,
+  Tooltip,
+  Badge,
+  Tabs,
+  Tab
 } from '@mui/material';
 import { 
   FiDownload, 
@@ -38,7 +46,16 @@ import {
   FiPlay,
   FiPause,
   FiVolume2,
-  FiVolumeX
+  FiVolumeX,
+  FiStar,
+  FiAlertTriangle,
+  FiTrendingUp,
+  FiClock,
+  FiMapPin,
+  FiFilter,
+  FiAward,
+  FiZap,
+  FiMessageSquare
 } from 'react-icons/fi';
 import {
   collection,
@@ -49,10 +66,474 @@ import {
   doc,
   orderBy,
   where,
-  getDocs
+  getDocs,
+  addDoc,
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { exportToCSV } from '../../utils/exportUtils';
+
+// AI Analysis Component
+const AIAnalysisPanel = ({ reports, selectedReport, onInsightSelect }) => {
+  const [activeTab, setActiveTab] = useState(0);
+  const [aiInsights, setAiInsights] = useState({
+    priority: [],
+    patterns: [],
+    recommendations: [],
+    sentiment: {}
+  });
+
+  // Generate AI insights based on reports data
+  useEffect(() => {
+    if (reports.length > 0) {
+      generateAIInsights();
+    }
+  }, [reports, selectedReport]);
+
+  const generateAIInsights = () => {
+    // AI Pattern Detection
+    const patterns = detectPatterns(reports);
+    
+    // Priority Recommendations
+    const priority = calculatePriority(reports);
+    
+    // Sentiment Analysis
+    const sentiment = analyzeSentiment(reports);
+    
+    // Smart Recommendations
+    const recommendations = generateRecommendations(reports, selectedReport);
+
+    setAiInsights({
+      patterns,
+      priority,
+      sentiment,
+      recommendations
+    });
+  };
+
+  const detectPatterns = (reports) => {
+    const patterns = [];
+    
+    // Location clustering
+    const locationCounts = {};
+    reports.forEach(report => {
+      locationCounts[report.location] = (locationCounts[report.location] || 0) + 1;
+    });
+    
+    const hotSpots = Object.entries(locationCounts)
+      .filter(([_, count]) => count > 2)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+    
+    if (hotSpots.length > 0) {
+      patterns.push({
+        type: 'location_cluster',
+        title: 'Geographic Hotspots',
+        description: `Multiple reports from ${hotSpots[0][0]}`,
+        severity: 'high',
+        count: hotSpots[0][1]
+      });
+    }
+
+    // Time pattern detection
+    const hourlyCounts = new Array(24).fill(0);
+    reports.forEach(report => {
+      const hour = report.timestamp?.toDate?.().getHours() || 12;
+      hourlyCounts[hour]++;
+    });
+    
+    const peakHour = hourlyCounts.indexOf(Math.max(...hourlyCounts));
+    if (hourlyCounts[peakHour] > 3) {
+      patterns.push({
+        type: 'time_pattern',
+        title: 'Peak Reporting Time',
+        description: `Most reports filed around ${peakHour}:00`,
+        severity: 'medium'
+      });
+    }
+
+    // Category trends
+    const categoryCounts = {};
+    reports.forEach(report => {
+      categoryCounts[report.category] = (categoryCounts[report.category] || 0) + 1;
+    });
+    
+    const trendingCategory = Object.entries(categoryCounts)
+      .sort((a, b) => b[1] - a[1])[0];
+    
+    if (trendingCategory && trendingCategory[1] > 5) {
+      patterns.push({
+        type: 'category_trend',
+        title: 'Trending Issue',
+        description: `${trendingCategory[0]} issues are increasing`,
+        severity: 'medium',
+        count: trendingCategory[1]
+      });
+    }
+
+    return patterns;
+  };
+
+  const calculatePriority = (reports) => {
+    const pendingReports = reports.filter(r => r.status === 'pending');
+    
+    return pendingReports
+      .map(report => {
+        let score = 0;
+        
+        // Priority scoring
+        if (report.priority === 'high') score += 30;
+        if (report.priority === 'critical') score += 50;
+        
+        // Time-based urgency (older reports get higher priority)
+        const reportAge = report.timestamp ? 
+          (new Date() - report.timestamp.toDate()) / (1000 * 60 * 60) : 0;
+        if (reportAge > 24) score += 20;
+        if (reportAge > 72) score += 30;
+        
+        // Category urgency
+        const urgentCategories = ['Public Safety', 'Infrastructure'];
+        if (urgentCategories.includes(report.category)) score += 25;
+        
+        return {
+          ...report,
+          aiPriorityScore: score,
+          recommendedAction: score > 60 ? 'Immediate Attention' : 
+                           score > 30 ? 'Review Today' : 'Monitor'
+        };
+      })
+      .sort((a, b) => b.aiPriorityScore - a.aiPriorityScore)
+      .slice(0, 5);
+  };
+
+  const analyzeSentiment = (reports) => {
+    const sentimentKeywords = {
+      positive: ['fixed', 'resolved', 'thanks', 'great', 'good', 'quick', 'helpful'],
+      negative: ['broken', 'dangerous', 'urgent', 'failed', 'complaint', 'issue', 'problem'],
+      urgent: ['emergency', 'critical', 'immediately', 'danger', 'safety', 'accident']
+    };
+
+    let positive = 0, negative = 0, urgent = 0;
+    
+    reports.forEach(report => {
+      const text = (report.title + ' ' + report.description).toLowerCase();
+      
+      if (sentimentKeywords.urgent.some(keyword => text.includes(keyword))) {
+        urgent++;
+      } else if (sentimentKeywords.negative.some(keyword => text.includes(keyword))) {
+        negative++;
+      } else if (sentimentKeywords.positive.some(keyword => text.includes(keyword))) {
+        positive++;
+      }
+    });
+
+    return { positive, negative, urgent, total: reports.length };
+  };
+
+  const generateRecommendations = (reports, selectedReport) => {
+    const recommendations = [];
+    
+    // Resource allocation recommendation
+    const pendingCount = reports.filter(r => r.status === 'pending').length;
+    if (pendingCount > 10) {
+      recommendations.push({
+        type: 'resource',
+        title: 'Increase Resources',
+        description: `High backlog: ${pendingCount} pending reports`,
+        action: 'Assign additional team members'
+      });
+    }
+
+    // Response time optimization
+    const avgResponseTime = calculateAverageResponseTime(reports);
+    if (avgResponseTime > 48) {
+      recommendations.push({
+        type: 'efficiency',
+        title: 'Improve Response Time',
+        description: `Average response: ${avgResponseTime}h`,
+        action: 'Streamline workflow processes'
+      });
+    }
+
+    // Specific report recommendations
+    if (selectedReport) {
+      if (selectedReport.priority === 'high' && selectedReport.status === 'pending') {
+        recommendations.push({
+          type: 'specific',
+          title: 'Expedite This Report',
+          description: 'High priority issue requires immediate attention',
+          action: 'Assign to senior team member'
+        });
+      }
+      
+      if (selectedReport.category === 'Infrastructure' && selectedReport.location) {
+        recommendations.push({
+          type: 'preventive',
+          title: 'Area Inspection',
+          description: 'Consider preventive maintenance in this area',
+          action: 'Schedule area assessment'
+        });
+      }
+    }
+
+    return recommendations;
+  };
+
+  const calculateAverageResponseTime = (reports) => {
+    const resolvedReports = reports.filter(r => r.status === 'resolved' && r.timestamp && r.updatedAt);
+    if (resolvedReports.length === 0) return 0;
+    
+    const totalHours = resolvedReports.reduce((sum, report) => {
+      const created = report.timestamp.toDate();
+      const resolved = report.updatedAt.toDate();
+      return sum + (resolved - created) / (1000 * 60 * 60);
+    }, 0);
+    
+    return Math.round(totalHours / resolvedReports.length);
+  };
+
+  return (
+    <Card sx={{ mb: 3 }}>
+      <CardContent>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <FiZap style={{ marginRight: 8, color: '#FF6B35' }} />
+          <Typography variant="h6">AI Insights & Analytics</Typography>
+        </Box>
+
+        <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 2 }}>
+          <Tab label="Patterns" />
+          <Tab label="Priority Queue" />
+          <Tab label="Recommendations" />
+          <Tab label="Sentiment" />
+        </Tabs>
+
+        {activeTab === 0 && (
+          <Box>
+            <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+              Detected Patterns & Trends
+            </Typography>
+            {aiInsights.patterns.map((pattern, index) => (
+              <Card key={index} variant="outlined" sx={{ mb: 1, p: 1.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box>
+                    <Typography variant="body2" fontWeight="medium">
+                      {pattern.title}
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      {pattern.description}
+                    </Typography>
+                  </Box>
+                  <Chip 
+                    label={pattern.count || 'Trend'} 
+                    size="small"
+                    color={pattern.severity === 'high' ? 'error' : 'warning'}
+                  />
+                </Box>
+              </Card>
+            ))}
+          </Box>
+        )}
+
+        {activeTab === 1 && (
+          <Box>
+            <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+              AI-Prioritized Reports
+            </Typography>
+            {aiInsights.priority.map((report, index) => (
+              <Card 
+                key={report.id} 
+                variant="outlined" 
+                sx={{ mb: 1, p: 1.5, cursor: 'pointer' }}
+                onClick={() => onInsightSelect(report)}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="body2" fontWeight="medium" noWrap>
+                      {report.title}
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary">
+                      {report.category} • {report.location}
+                    </Typography>
+                    <LinearProgress 
+                      variant="determinate" 
+                      value={Math.min(report.aiPriorityScore, 100)} 
+                      sx={{ mt: 0.5, height: 4 }}
+                      color={report.aiPriorityScore > 60 ? 'error' : 'warning'}
+                    />
+                  </Box>
+                  <Chip 
+                    label={report.recommendedAction} 
+                    size="small"
+                    color={report.aiPriorityScore > 60 ? 'error' : 'warning'}
+                  />
+                </Box>
+              </Card>
+            ))}
+          </Box>
+        )}
+
+        {activeTab === 2 && (
+          <Box>
+            <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+              Smart Recommendations
+            </Typography>
+            {aiInsights.recommendations.map((rec, index) => (
+              <Card key={index} variant="outlined" sx={{ mb: 1, p: 1.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                  <FiAlertTriangle color="#FF6B35" size={16} style={{ marginTop: 2 }} />
+                  <Box>
+                    <Typography variant="body2" fontWeight="medium">
+                      {rec.title}
+                    </Typography>
+                    <Typography variant="caption" color="textSecondary" display="block">
+                      {rec.description}
+                    </Typography>
+                    <Typography variant="caption" color="primary" display="block">
+                      {rec.action}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Card>
+            ))}
+          </Box>
+        )}
+
+        {activeTab === 3 && (
+          <Box>
+            <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+              Community Sentiment Analysis
+            </Typography>
+            <Grid container spacing={2} sx={{ mb: 2 }}>
+              <Grid item xs={4}>
+                <Box textAlign="center">
+                  <Typography variant="h6" color="success.main">
+                    {aiInsights.sentiment.positive}
+                  </Typography>
+                  <Typography variant="caption">Positive</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={4}>
+                <Box textAlign="center">
+                  <Typography variant="h6" color="warning.main">
+                    {aiInsights.sentiment.negative}
+                  </Typography>
+                  <Typography variant="caption">Concerned</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={4}>
+                <Box textAlign="center">
+                  <Typography variant="h6" color="error.main">
+                    {aiInsights.sentiment.urgent}
+                  </Typography>
+                  <Typography variant="caption">Urgent</Typography>
+                </Box>
+              </Grid>
+            </Grid>
+            <LinearProgress 
+              variant="determinate" 
+              value={(aiInsights.sentiment.positive / aiInsights.sentiment.total) * 100} 
+              color="success"
+              sx={{ mb: 0.5, height: 6 }}
+            />
+            <LinearProgress 
+              variant="determinate" 
+              value={(aiInsights.sentiment.negative / aiInsights.sentiment.total) * 100} 
+              color="warning"
+              sx={{ mb: 0.5, height: 6 }}
+            />
+            <LinearProgress 
+              variant="determinate" 
+              value={(aiInsights.sentiment.urgent / aiInsights.sentiment.total) * 100} 
+              color="error"
+              sx={{ height: 6 }}
+            />
+          </Box>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+// Smart Auto-Response Component
+const SmartAutoResponse = ({ report, onApplyResponse }) => {
+  const [suggestedResponses, setSuggestedResponses] = useState([]);
+
+  useEffect(() => {
+    generateSuggestedResponses();
+  }, [report]);
+
+  const generateSuggestedResponses = () => {
+    const responses = [];
+    
+    if (report.category === 'Infrastructure') {
+      responses.push({
+        type: 'template',
+        title: 'Infrastructure Repair',
+        message: `Thank you for reporting this ${report.category.toLowerCase()} issue. Our team has been notified and will inspect the location within 24-48 hours. We appreciate your help in keeping our community safe.`,
+        status: 'in-progress'
+      });
+    }
+
+    if (report.priority === 'high' || report.priority === 'critical') {
+      responses.push({
+        type: 'urgent',
+        title: 'Immediate Attention',
+        message: `We've classified your report as high priority due to its urgent nature. Our response team has been dispatched to assess the situation. Thank you for bringing this to our attention promptly.`,
+        status: 'in-progress'
+      });
+    }
+
+    if (report.category === 'Public Safety') {
+      responses.push({
+        type: 'safety',
+        title: 'Safety Concern',
+        message: `Your public safety concern has been received. We're coordinating with the relevant authorities to address this issue. For immediate emergencies, please contact emergency services directly.`,
+        status: 'in-progress'
+      });
+    }
+
+    // Generic response
+    responses.push({
+      type: 'generic',
+      title: 'Standard Response',
+      message: `Thank you for your report. We've received your ${report.category.toLowerCase()} concern and will review it shortly. You can track the status of your report in the app.`,
+      status: 'pending'
+    });
+
+    setSuggestedResponses(responses);
+  };
+
+  return (
+    <Box sx={{ mt: 2 }}>
+      <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+        <FiMessageSquare style={{ marginRight: 8 }} />
+        AI Suggested Responses
+      </Typography>
+      {suggestedResponses.map((response, index) => (
+        <Card key={index} variant="outlined" sx={{ mb: 1, p: 1.5 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="body2" fontWeight="medium">
+                {response.title}
+              </Typography>
+              <Typography variant="caption" color="textSecondary">
+                {response.message}
+              </Typography>
+            </Box>
+            <Button 
+              size="small" 
+              variant="outlined"
+              onClick={() => onApplyResponse(response)}
+              sx={{ ml: 1 }}
+            >
+              Apply
+            </Button>
+          </Box>
+        </Card>
+      ))}
+    </Box>
+  );
+};
 
 const Reports = () => {
   const [reports, setReports] = useState([]);
@@ -71,6 +552,7 @@ const Reports = () => {
     progress: 0,
     duration: 0
   });
+  const [aiEnabled, setAiEnabled] = useState(true);
   const videoRef = useRef(null);
 
   // Status color mapping
@@ -223,6 +705,35 @@ const Reports = () => {
     }
   };
 
+  // Handle AI suggested response
+  const handleApplyResponse = async (response) => {
+    if (!viewingReport) return;
+    
+    try {
+      await updateDoc(doc(db, 'reports', viewingReport.id), {
+        status: response.status,
+        adminResponse: response.message,
+        respondedAt: new Date(),
+        updatedAt: new Date()
+      });
+      
+      setSnackbar({ 
+        open: true, 
+        message: 'AI response applied successfully', 
+        severity: 'success' 
+      });
+      setViewingReport(null);
+    } catch (error) {
+      console.error('Error applying AI response:', error);
+      setSnackbar({ open: true, message: 'Error applying response', severity: 'error' });
+    }
+  };
+
+  // Handle AI insight selection
+  const handleInsightSelect = (report) => {
+    setViewingReport(report);
+  };
+
   // Handle report deletion
   const handleDeleteReport = async () => {
     try {
@@ -288,6 +799,21 @@ const Reports = () => {
     return str.charAt(0).toUpperCase() + str.slice(1);
   };
 
+  // Get AI badge for priority
+  const getAIPriorityBadge = (report) => {
+    const age = report.timestamp ? (new Date() - report.timestamp.toDate()) / (1000 * 60 * 60) : 0;
+    const isUrgent = report.priority === 'high' || report.priority === 'critical' || age > 48;
+    
+    if (isUrgent) {
+      return (
+        <Tooltip title="AI Recommended: High Priority">
+          <FiStar color="#FF6B35" size={16} style={{ marginLeft: 4 }} />
+        </Tooltip>
+      );
+    }
+    return null;
+  };
+
   return (
     <Box>
       {/* Header and Action Bar */}
@@ -297,16 +823,44 @@ const Reports = () => {
         alignItems: 'center',
         mb: 3
       }}>
-        <Typography variant="h4">Reports Management</Typography>
-        <Button 
-          variant="contained" 
-          startIcon={<FiPlus />}
-          sx={{ textTransform: 'none' }}
-          onClick={() => window.location.href = '/report-incident'}
-        >
-          New Report
-        </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Typography variant="h4">Reports Management</Typography>
+          <Chip 
+            label="AI Powered" 
+            color="primary" 
+            variant="outlined"
+            icon={<FiZap />}
+            sx={{ ml: 2 }}
+          />
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button 
+            variant={aiEnabled ? "contained" : "outlined"}
+            startIcon={<FiZap />}
+            onClick={() => setAiEnabled(!aiEnabled)}
+            color={aiEnabled ? "primary" : "default"}
+          >
+            AI {aiEnabled ? 'On' : 'Off'}
+          </Button>
+          <Button 
+            variant="contained" 
+            startIcon={<FiPlus />}
+            sx={{ textTransform: 'none' }}
+            onClick={() => window.location.href = '/report-incident'}
+          >
+            New Report
+          </Button>
+        </Box>
       </Box>
+
+      {/* AI Insights Panel */}
+      {aiEnabled && (
+        <AIAnalysisPanel 
+          reports={reports} 
+          selectedReport={viewingReport}
+          onInsightSelect={handleInsightSelect}
+        />
+      )}
 
       {/* Filters */}
       <Box sx={{ 
@@ -418,9 +972,12 @@ const Reports = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" fontWeight="medium">
-                        {report.title}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Typography variant="body2" fontWeight="medium">
+                          {report.title}
+                        </Typography>
+                        {aiEnabled && getAIPriorityBadge(report)}
+                      </Box>
                     </TableCell>
                     <TableCell sx={{ maxWidth: 200 }}>
                       <Typography variant="body2" title={report.description}>
@@ -456,14 +1013,16 @@ const Reports = () => {
                       </FormControl>
                     </TableCell>
                     <TableCell>
-                      <Chip 
-                        label={capitalizeFirst(report.priority)} 
-                        size="small"
-                        color={
-                          report.priority === 'high' ? 'error' : 
-                          report.priority === 'medium' ? 'warning' : 'default'
-                        }
-                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Chip 
+                          label={capitalizeFirst(report.priority)} 
+                          size="small"
+                          color={
+                            report.priority === 'high' ? 'error' : 
+                            report.priority === 'medium' ? 'warning' : 'default'
+                          }
+                        />
+                      </Box>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" sx={{ maxWidth: 150 }} title={report.location}>
@@ -515,6 +1074,16 @@ const Reports = () => {
       <Dialog open={!!viewingReport} onClose={() => setViewingReport(null)} maxWidth="md" fullWidth>
         <DialogTitle>
           Report Details
+          {aiEnabled && (
+            <Chip 
+              label="AI Enhanced" 
+              size="small" 
+              color="primary" 
+              variant="outlined"
+              icon={<FiZap />}
+              sx={{ ml: 1 }}
+            />
+          )}
         </DialogTitle>
         <DialogContent>
           {viewingReport && (
@@ -549,7 +1118,6 @@ const Reports = () => {
                 <strong>Location:</strong> {viewingReport.location}
               </Typography>
               
-              {/* Added user email information */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                 <FiMail size={16} />
                 <Typography variant="body2">
@@ -569,6 +1137,14 @@ const Reports = () => {
                   </Typography>
                 )}
               </Box>
+
+              {/* AI Auto-Response Suggestions */}
+              {aiEnabled && (
+                <SmartAutoResponse 
+                  report={viewingReport}
+                  onApplyResponse={handleApplyResponse}
+                />
+              )}
               
               {viewingReport.media_url && (
                 <Box sx={{ mt: 2 }}>
